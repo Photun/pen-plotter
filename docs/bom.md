@@ -1,7 +1,5 @@
 # Bill of Materials
 
-This BOM was cleaned from the Onshape assembly export. Quantities are for one pen plotter unless noted otherwise.
-
 | Name | Quantity | Notes |
 | --- | ---: | --- |
 | Back Corner Brackets | 2 | Same for both far side corners. |
@@ -61,7 +59,3 @@ This BOM was cleaned from the Onshape assembly export. Quantities are for one pe
 | M3 x 6 screw | 1 | - |
 | M6 x 30 screw | 4 | - |
 | M6 washer | 4 | - |
-
-## Source
-
-Generated from `BOM of Assembly 1.csv`, exported from the Onshape assembly.
