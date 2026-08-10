@@ -25,7 +25,7 @@ exports/drawings/         PDF or DXF drawings, if needed
 ```text
 Design: in progress in Onshape
 Build: not documented yet
-Firmware: not added yet
+Firmware: scaffold added in firmware/
 Photos: not added yet
 ```
 
@@ -37,6 +37,7 @@ Photos: not added yet
 4. Add the exported files to `exports/`.
 5. Add build photos, renders, and wiring photos to `photos/`.
 6. Use the bill of materials in `docs/bom.md` once parts are finalized.
+7. Add controller code and upload notes to `firmware/` once the electronics are chosen.
 
 ## Onshape Export Quick Guide
 
