@@ -1,0 +1,10 @@
+.DS_Store
+Thumbs.db
+
+# Generated slicer/CAM output
+*.gcode
+*.nc
+
+# Temporary export archives
+*.tmp
+*.bak
