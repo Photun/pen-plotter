@@ -44,7 +44,6 @@ Done:
 
 Still needed before final shipping:
 
-- Add final CAD exports to `exports/`.
 - Add build photos and first plot photos to `photos/`.
 - Add a real Macondo thumbnail showing the actual project.
 - Do final mechanical tuning and document any changed dimensions.
@@ -61,18 +60,21 @@ cd pen-plotter
 Install PlatformIO for VS Code, then build firmware:
 
 ```bash
+cd firmware
 pio run -e uno
 ```
 
 Upload to an Arduino Uno:
 
 ```bash
+cd firmware
 pio run -e uno -t upload
 ```
 
 Build and launch the desktop controller app:
 
 ```bash
+cd firmware
 tools/build_macos_app.sh
 open "Plotter Studio.app"
 ```
@@ -80,6 +82,7 @@ open "Plotter Studio.app"
 Or launch the browser version:
 
 ```bash
+cd firmware
 python3 -m venv .venv
 .venv/bin/python -m pip install -r tools/requirements.txt
 .venv/bin/python tools/plotter_studio.py
@@ -146,39 +149,34 @@ D12 SpnEn -> servo signal
 ## What's In This Repo
 
 ```text
-app/static/          Plotter Studio frontend
-desktop/macos/       macOS wrapper for the local app
-docs/                assembly guide, BOM, and app notes
-examples/            square/circle smoke-test files
-exports/             CAD exports to add for shipping
-firmware/src/        Arduino Uno firmware
+hardware/            assembly guide and BOM
+firmware/            Arduino firmware, Plotter Studio app, scripts, examples
 photos/              build photos, CAD screenshots, plot photos
-tools/               Python app backend, slicer/sender scripts, launch scripts
 ```
 
-Most readers should start with `README.md`, then `docs/assembly.md`, then the
+Most readers should start with `README.md`, then `hardware/assembly.md`, then the
 BOM. The firmware and app folders are mostly implementation details unless you
 are changing code.
 
 Folders you can mostly ignore when just reviewing or building the machine:
 
 ```text
-app/static/          app frontend internals
-desktop/macos/       native macOS wrapper source
-tools/               Python backend and helper scripts
-examples/            quick test drawings
-exports/             final CAD exports, once added
+firmware/app/        app frontend internals
+firmware/desktop/    native macOS wrapper source
+firmware/tools/      Python backend and helper scripts
+firmware/examples/   quick test drawings
+hardware/exports/    final CAD exports
 photos/              project photos, once added
 ```
 
 Generated local folders such as `.pio/`, `.venv/`, `.plotter-app/`, and
 `Plotter Studio.app/` are not part of the source package.
 
-## Documentation
+## Build Files
 
-- `docs/assembly.md` - main build guide: mechanical assembly, electronics, wiring, first tests
-- `docs/bom.md` - human-readable bill of materials
-- `docs/bom.csv` - spreadsheet-friendly bill of materials
+- `hardware/assembly.md` - main build guide: mechanical assembly, electronics, wiring, first tests
+- `hardware/bom.md` - human-readable bill of materials
+- `hardware/bom.csv` - spreadsheet-friendly bill of materials
 - `firmware/README.md` - Plotter Studio, firmware upload, controls, pin notes
 
 ## CAD
@@ -189,13 +187,14 @@ Onshape CAD:
 https://cad.onshape.com/documents/21408afa0678dfc090a39137/w/cada99e8b20e026a88815622/e/614e2d6018b77ddf107765d2?renderMode=0&leftPanel=false&uiState=6a7a26314284ccba60f59ccc
 ```
 
-Final STEP/STL/PDF exports should be placed in `exports/` before final shipping.
+Exported CAD files are included in `hardware/exports/`: the full assembly STEP
+is in `hardware/exports/assembly/`, and printable STL files are in
+`hardware/exports/stl/`.
 
 ## Before Shipping
 
 Before final Macondo shipping, this repo still needs:
 
-- final CAD exports in `exports/`
 - build photos, CAD screenshots, and first plot photos in `photos/`
 - a good project thumbnail
 - one last pass through the assembly guide with the real final hardware

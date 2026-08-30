@@ -164,12 +164,14 @@ Before uploading or moving:
 Then upload the firmware:
 
 ```bash
+cd firmware
 pio run -e uno -t upload
 ```
 
 Open the serial monitor:
 
 ```bash
+cd firmware
 pio device monitor -e uno
 ```
 
@@ -242,6 +244,7 @@ if there is not enough distance to accelerate and decelerate gently.
 Launch Plotter Studio:
 
 ```bash
+cd firmware
 python3 -m venv .venv
 .venv/bin/python -m pip install -r tools/requirements.txt
 .venv/bin/python tools/plotter_studio.py
@@ -252,6 +255,7 @@ Then open `http://127.0.0.1:8765`.
 Send the square smoke test:
 
 ```bash
+cd firmware
 pio run -e uno -t upload && .venv/bin/python tools/send_gcode.py --confirm-home examples/square.gcode
 ```
 

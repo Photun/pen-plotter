@@ -1,13 +1,13 @@
 # Plotter Studio And Firmware
 
 This is the practical guide for running the plotter from VS Code / PlatformIO
-and Plotter Studio. The firmware source is `firmware/src/main.cpp`, but most
+and Plotter Studio. The firmware source is `src/main.cpp`, but most
 normal drawing should happen from the app, not by typing serial commands.
 
 ## Upload Firmware
 
 Install the PlatformIO extension in VS Code, connect the Arduino Uno, then run
-from the repo root:
+from this `firmware/` folder:
 
 ```bash
 pio run -e uno
@@ -18,7 +18,7 @@ In VS Code's PlatformIO bar, the checkmark builds and the right-arrow uploads.
 Close Plotter Studio or any serial monitor before uploading, because only one
 program can use the Arduino serial port at a time.
 
-Firmware only needs to be uploaded when `firmware/src/main.cpp` changes. Normal
+Firmware only needs to be uploaded when `src/main.cpp` changes. Normal
 drawings are sent from Plotter Studio over USB serial.
 
 ## Launch Plotter Studio

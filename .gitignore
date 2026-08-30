@@ -4,8 +4,8 @@ Thumbs.db
 # Generated slicer/CAM output
 *.gcode
 *.nc
-!examples/
-!examples/*.gcode
+!firmware/examples/
+!firmware/examples/*.gcode
 
 # Temporary export archives
 *.tmp
@@ -20,6 +20,7 @@ __pycache__/
 *.pyc
 .plotter-app/
 Plotter Studio.app/
+.env.local
 
 # PlatformIO/VS Code generated project files with machine-local paths
 .vscode/c_cpp_properties.json
