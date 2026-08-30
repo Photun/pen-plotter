@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Plotter Studio</title>
+    <link rel="stylesheet" href="/static/styles.css?v=pen-lift-1">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand-block">
+          <div class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 40 40" role="img">
+              <rect x="8" y="8" width="24" height="24" rx="3"></rect>
+              <path d="M12 28 L18 16 L24 24 L29 12"></path>
+              <circle cx="29" cy="12" r="2.7"></circle>
+              <path d="M24 28 L30 28"></path>
+            </svg>
+          </div>
+          <div>
+            <h1>Plotter Studio</h1>
+            <p>CoreXY pen plotter</p>
+          </div>
+        </div>
+
+        <div class="top-actions">
+          <div class="connection-pill" id="connectionPill">
+            <span class="status-dot" id="statusDot"></span>
+            <span id="connectionText">Disconnected</span>
+          </div>
+          <select id="portSelect" title="Serial port"></select>
+          <button class="icon-button" id="refreshPortsBtn" title="Refresh ports">RF</button>
+          <button class="primary-button" id="connectBtn">Connect</button>
+        </div>
+      </header>
+
+      <nav class="tabbar" aria-label="App sections">
+        <button class="tab-button active" data-tab="prepare">Prepare</button>
+        <button class="tab-button" data-tab="preview">Preview</button>
+        <button class="tab-button" data-tab="device">Device</button>
+        <button class="tab-button" data-tab="console">Console</button>
+      </nav>
+
+      <main>
+        <section class="tab-panel active" id="preparePanel">
+          <aside class="side-panel">
+            <div class="panel-section">
+              <div class="section-title">
+                <h2>Project</h2>
+              </div>
+              <div class="file-drop">
+                <span id="fileName">No image loaded</span>
+                <button class="secondary-button" id="openFileBtn" type="button">Open Image</button>
+              </div>
+              <input id="svgInput" type="file" accept=".svg,image/svg+xml,image/png,image/jpeg,image/gif,image/bmp,image/webp">
+              <div class="button-row">
+                <button class="secondary-button" id="loadSquareBtn">Load Square</button>
+                <button class="secondary-button" id="loadCircleBtn">Load Circle</button>
+              </div>
+            </div>
+
+            <div class="panel-section">
+              <div class="section-title">
+                <h2>Stats</h2>
+              </div>
+              <dl class="stats-list">
+                <div><dt>Lines</dt><dd id="statLines">0</dd></div>
+                <div><dt>Draw moves</dt><dd id="statDrawMoves">0</dd></div>
+                <div><dt>Curves</dt><dd id="statCurveMoves">0</dd></div>
+                <div><dt>Travel moves</dt><dd id="statTravelMoves">0</dd></div>
+                <div><dt>Travel saved</dt><dd id="statTravelSaved">0</dd></div>
+                <div><dt>Paper</dt><dd id="statPaper">Full canvas</dd></div>
+                <div><dt>Bounds</dt><dd id="statBounds">--</dd></div>
+              </dl>
+              <div id="warningBox" class="warning-box hidden"></div>
+            </div>
+          </aside>
+
+          <section class="plate-stage">
+            <div class="stage-header">
+              <div>
+                <h2>Plate</h2>
+                <p id="plateSubtitle">406 x 370 mm</p>
+              </div>
+              <div class="stage-actions">
+                <div class="plate-legend" aria-label="Preview legend">
+                  <span><i class="legend-line"></i>Draw</span>
+                  <span><i class="legend-margin"></i>Margin</span>
+                </div>
+                <button class="secondary-button" id="sliceBtn">Slice Plate</button>
+              </div>
+            </div>
+            <div class="task-progress hidden" id="sliceProgressWrap">
+              <div class="task-progress-top">
+                <span id="sliceProgressLabel">Slicing...</span>
+                <span id="sliceProgressValue">0%</span>
+              </div>
+              <div class="progress-track">
+                <div id="sliceProgressFill" class="progress-fill"></div>
+              </div>
+            </div>
+            <canvas id="plateCanvas"></canvas>
+            <div class="job-strip">
+              <div class="job-text">
+                <span id="jobName">Idle</span>
+                <span id="jobMessage"></span>
+              </div>
+              <div class="progress-track">
+                <div id="jobProgress" class="progress-fill"></div>
+              </div>
+              <div class="job-buttons">
+                <button class="secondary-button" id="pauseBtn">Pause</button>
+                <button class="secondary-button" id="resumeBtn">Resume</button>
+                <button class="danger-button" id="stopBtn">Stop</button>
+              </div>
+            </div>
+          </section>
+
+          <aside class="process-panel">
+            <div class="panel-section">
+              <div class="section-title">
+                <h2>Process</h2>
+              </div>
+              <label class="select-row">
+                <span>Paper size</span>
+                <select id="paperModeInput">
+                  <option value="full">Full canvas</option>
+                  <option value="letter">Letter centered</option>
+                </select>
+              </label>
+              <label class="check-row">
+                <input type="checkbox" id="fitToBed" checked>
+                <span>Fit to bed</span>
+              </label>
+              <div class="input-grid">
+                <label>Margin<input id="marginInput" type="number" value="12" min="0" step="1"></label>
+              </div>
+            </div>
+
+          </aside>
+        </section>
+
+        <section class="tab-panel" id="previewPanel">
+          <section class="plate-stage wide">
+            <div class="stage-header">
+              <div>
+                <h2>Toolpath Preview</h2>
+                <p id="previewSubtitle">No plate sliced</p>
+              </div>
+              <div class="stage-actions">
+                <div class="plate-legend" aria-label="Preview legend">
+                  <span><i class="legend-line"></i>Draw</span>
+                  <span><i class="legend-margin"></i>Margin</span>
+                </div>
+                <button class="send-button" id="confirmSliceBtn">Confirm Slice</button>
+              </div>
+            </div>
+            <canvas id="previewCanvas"></canvas>
+          </section>
+          <aside class="gcode-panel">
+            <div class="section-title">
+              <h2>G-code</h2>
+            </div>
+            <textarea id="gcodeText" spellcheck="false" readonly></textarea>
+          </aside>
+        </section>
+
+        <section class="tab-panel" id="devicePanel">
+          <aside class="side-panel">
+            <div class="panel-section">
+              <div class="section-title">
+                <h2>Connection</h2>
+              </div>
+              <dl class="stats-list">
+                <div><dt>Port</dt><dd id="devicePort">--</dd></div>
+                <div><dt>Home</dt><dd id="deviceHome">No</dd></div>
+                <div><dt>X</dt><dd id="deviceX">0.00</dd></div>
+                <div><dt>Y</dt><dd id="deviceY">0.00</dd></div>
+                <div class="readonly-stat"><dt>X max</dt><dd id="deviceXMax">406.00</dd></div>
+                <div class="readonly-stat"><dt>Y max</dt><dd id="deviceYMax">370.00</dd></div>
+              </dl>
+            </div>
+
+            <div class="panel-section">
+              <div class="section-title">
+                <h2>Manual Home</h2>
+              </div>
+              <div class="button-grid two">
+                <button class="secondary-button manual-cmd" data-command="M18">Motors Off</button>
+                <button class="secondary-button manual-cmd" data-command="M17">Motors On</button>
+              </div>
+              <div class="device-notice warning" id="deviceNotice">Move to X0 Y0, then confirm home.</div>
+              <button class="primary-button full-width" id="confirmHomeBtn">Confirm X0 Y0</button>
+            </div>
+          </aside>
+
+          <section class="device-stage">
+            <div class="control-panel">
+              <div class="section-title">
+                <h2>Jog</h2>
+              </div>
+              <div class="jog-layout">
+                <div></div>
+                <button class="jog-button" data-dx="0" data-dy="1">Y+</button>
+                <div></div>
+                <button class="jog-button" data-dx="-1" data-dy="0">X-</button>
+                <button class="jog-home" id="jogHomeBtn">0,0</button>
+                <button class="jog-button" data-dx="1" data-dy="0">X+</button>
+                <div></div>
+                <button class="jog-button" data-dx="0" data-dy="-1">Y-</button>
+                <div></div>
+              </div>
+              <label class="inline-field">Step
+                <input id="jogStepInput" type="number" value="10" min="0.1" step="1">
+                <span>mm</span>
+              </label>
+            </div>
+
+            <div class="control-panel">
+              <div class="section-title">
+                <h2>Pen</h2>
+              </div>
+              <div class="button-grid three">
+                <button class="state-button manual-cmd" id="penUpBtn" data-pen-state="up" data-command="M5">Pen Up</button>
+                <button class="state-button manual-cmd" id="penDownBtn" data-pen-state="down" data-command="M3">Pen Down</button>
+                <button class="state-button manual-cmd" id="penOffBtn" data-pen-state="off" data-command="soff">Servo Off</button>
+              </div>
+            </div>
+
+            <div class="control-panel manual-panel">
+              <div class="section-title">
+                <h2>Command</h2>
+              </div>
+              <div class="manual-command">
+                <input id="manualCommandInput" type="text" placeholder="G0 X203 Y185 or s 75">
+                <button class="primary-button" id="manualSendBtn">Send</button>
+              </div>
+            </div>
+          </section>
+
+          <aside class="process-panel">
+            <div class="panel-section">
+              <div class="section-title">
+                <h2>Live Tune</h2>
+              </div>
+              <label class="range-row">
+                <span>Speed delay</span>
+                <input id="liveSpeedDelayInput" type="range" min="1" max="200" step="1" value="50">
+                <output id="liveSpeedDelayValue">50 us</output>
+              </label>
+              <label class="range-row">
+                <span>Acceleration</span>
+                <input id="liveAccelInput" type="range" min="8000" max="100000" step="1000" value="10000">
+                <output id="liveAccelValue">10000</output>
+              </label>
+              <label class="range-row">
+                <span>Pen up wait</span>
+                <input id="livePenUpDelayInput" type="range" min="0" max="1000" step="25" value="200">
+                <output id="livePenUpDelayValue">200 ms</output>
+              </label>
+              <label class="range-row">
+                <span>Pen up lift</span>
+                <input id="livePenUpLiftInput" type="range" min="0" max="100" step="1" value="100">
+                <output id="livePenUpLiftValue">100%</output>
+              </label>
+              <label class="range-row">
+                <span>Pen down wait</span>
+                <input id="livePenDownDelayInput" type="range" min="0" max="1000" step="25" value="600">
+                <output id="livePenDownDelayValue">600 ms</output>
+              </label>
+              <button class="primary-button full-width" id="applyLiveBtn">Apply Live Tune</button>
+            </div>
+
+            <div class="panel-section">
+              <div class="section-title">
+                <h2>Job</h2>
+              </div>
+              <button class="send-button full-width" id="deviceSendBtn">Send To Plotter</button>
+              <div class="job-text compact">
+                <span id="deviceJobName">Idle</span>
+                <span id="deviceJobMessage"></span>
+              </div>
+              <div class="progress-track">
+                <div id="deviceJobProgress" class="progress-fill"></div>
+              </div>
+              <div class="job-minimap-wrap hidden" id="jobMiniMapWrap">
+                <canvas id="jobMiniMap"></canvas>
+                <div class="minimap-legend">
+                  <span><i class="legend-pending"></i>Remaining</span>
+                  <span><i class="legend-done"></i>Drawn</span>
+                  <span><i class="legend-head"></i>Head</span>
+                </div>
+              </div>
+              <div class="button-grid three">
+                <button class="secondary-button" id="devicePauseBtn">Pause</button>
+                <button class="secondary-button" id="deviceResumeBtn">Resume</button>
+                <button class="danger-button" id="deviceStopBtn">Stop</button>
+              </div>
+            </div>
+          </aside>
+        </section>
+
+        <section class="tab-panel" id="consolePanel">
+          <section class="console-stage">
+            <div class="stage-header">
+              <div>
+                <h2>Console</h2>
+                <p id="consoleSubtitle">Serial and app events</p>
+              </div>
+              <button class="secondary-button" id="clearLogBtn">Clear View</button>
+            </div>
+            <div class="log-view" id="logView"></div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <div class="modal-backdrop hidden" id="importModal" aria-hidden="true">
+      <section class="import-modal" role="dialog" aria-modal="true" aria-labelledby="importTitle">
+        <div class="modal-header">
+          <div>
+            <h2 id="importTitle">Import Image</h2>
+            <p id="importSubtitle">Trace raster artwork into plotter lines</p>
+          </div>
+          <button class="icon-button" id="importCloseBtn" type="button" title="Close">X</button>
+        </div>
+        <div class="import-body">
+          <aside class="import-controls">
+            <label class="select-row">
+              <span>Trace mode</span>
+              <select id="traceModeInput">
+                <option value="contour">Clean contour</option>
+                <option value="ink">Ink centerline</option>
+                <option value="legacy">Legacy pixels</option>
+              </select>
+            </label>
+            <label class="range-row">
+              <span>Edge threshold</span>
+              <input id="traceThresholdInput" type="range" min="1" max="255" step="1" value="34">
+              <output id="traceThresholdValue">34</output>
+            </label>
+            <label class="range-row">
+              <span>Simplify</span>
+              <input id="traceSpacingInput" type="range" min="0" max="32" step="0.25" value="1.5">
+              <output id="traceSpacingValue">1.5 px</output>
+            </label>
+            <label class="range-row">
+              <span>Trace size</span>
+              <input id="traceSizeInput" type="range" min="120" max="3200" step="20" value="720">
+              <output id="traceSizeValue">720 px</output>
+            </label>
+            <label class="range-row">
+              <span>Min stroke</span>
+              <input id="traceMinPathInput" type="range" min="0" max="200" step="1" value="8">
+              <output id="traceMinPathValue">8 px</output>
+            </label>
+            <label class="range-row">
+              <span>Link gap</span>
+              <input id="traceLinkGapInput" type="range" min="0" max="80" step="1" value="5">
+              <output id="traceLinkGapValue">5 px</output>
+            </label>
+            <div class="import-status" id="importStatus">Waiting for image</div>
+            <div class="task-progress hidden" id="traceProgressWrap">
+              <div class="task-progress-top">
+                <span id="traceProgressLabel">Tracing...</span>
+                <span id="traceProgressValue">0%</span>
+              </div>
+              <div class="progress-track">
+                <div id="traceProgressFill" class="progress-fill"></div>
+              </div>
+            </div>
+          </aside>
+          <div class="import-preview-grid">
+            <div class="import-preview-pane">
+              <h3>Original</h3>
+              <img id="importOriginalPreview" alt="">
+            </div>
+            <div class="import-preview-pane">
+              <h3>Trace</h3>
+              <img id="importTracePreview" alt="">
+            </div>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="secondary-button" id="importCancelBtn" type="button">Cancel</button>
+          <button class="primary-button" id="importConfirmBtn" type="button">Import To Plate</button>
+        </div>
+      </section>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+    <script src="/static/app.js?v=pen-lift-1"></script>
+  </body>
+</html>
