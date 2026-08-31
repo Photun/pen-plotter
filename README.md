@@ -48,19 +48,6 @@ image or SVG
 -> CoreXY motors and pen servo
 ```
 
-Main electronics:
-
-```text
-Arduino Uno
-CNC Shield V3
-DRV8825 stepper drivers
-2x NEMA 17 stepper motors
-servo for pen lift
-external motor supply
-external 5V servo supply
-IRLZ44N N-channel MOSFET for servo power switching
-```
-
 ## Build One
 
 Start with the hardware docs:
