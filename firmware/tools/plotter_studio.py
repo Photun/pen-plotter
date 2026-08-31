@@ -12,6 +12,7 @@ import subprocess
 import sys
 import threading
 import time
+import uuid
 from collections import deque
 from pathlib import Path
 from typing import Any
@@ -49,9 +50,14 @@ Y_MAX = 370.0
 STEPS_PER_MM = 160.0
 LETTER_PAPER_WIDTH = 140.0
 LETTER_PAPER_HEIGHT = round(LETTER_PAPER_WIDTH * 8.5 / 11.0, 3)
-RASTER_TRACE_TIMEOUT_S = 10.0
 RASTER_TRACE_MAX_SIDE = 3200
-RASTER_TRACE_MAX_EDGE_DENSITY = 0.28
+trace_lock = threading.Lock()
+trace_generation = 0
+trace_jobs: dict[str, dict[str, Any]] = {}
+
+
+class TraceCanceled(Exception):
+    pass
 
 
 class SliceSettings(BaseModel):
@@ -154,9 +160,86 @@ def paper_area_for_settings(settings: SliceSettings) -> dict[str, Any]:
     }
 
 
-def check_trace_deadline(deadline: float) -> None:
-    if time.monotonic() > deadline:
-        raise TimeoutError("Trace took too long. Raise threshold, reduce trace size, or increase min stroke.")
+def next_trace_token() -> int:
+    global trace_generation
+    with trace_lock:
+        trace_generation += 1
+        return trace_generation
+
+
+def check_trace_deadline(deadline: float | int) -> None:
+    if isinstance(deadline, int):
+        with trace_lock:
+            if deadline != trace_generation:
+                raise TraceCanceled("Trace canceled.")
+
+
+def start_trace_job(request: RasterTraceRequest) -> dict[str, str]:
+    job_id = uuid.uuid4().hex
+    token = next_trace_token()
+    with trace_lock:
+        trace_jobs[job_id] = {
+            "status": "running",
+            "progress": 2,
+            "label": "Queued",
+            "created_at": time.monotonic(),
+            "token": token,
+        }
+
+    thread = threading.Thread(target=run_trace_job, args=(job_id, token, request), daemon=True)
+    thread.start()
+    return {"job_id": job_id}
+
+
+def trace_job_progress(job_id: str, progress: float, label: str) -> None:
+    with trace_lock:
+        job = trace_jobs.get(job_id)
+        if not job or job.get("status") != "running":
+            return
+        job["progress"] = max(job.get("progress", 0), min(96, progress))
+        job["label"] = label
+
+
+def run_trace_job(job_id: str, token: int, request: RasterTraceRequest) -> None:
+    try:
+        trace_job_progress(job_id, 8, "Loading image")
+        svg_text = raster_to_svg(
+            request.filename,
+            request.image_data,
+            trace_mode=request.trace_mode,
+            threshold=request.threshold,
+            simplify_px=request.simplify_px,
+            max_side=request.max_side,
+            min_path_px=request.min_path_px,
+            link_gap_px=request.link_gap_px,
+            trace_token=token,
+            progress=lambda pct, label: trace_job_progress(job_id, pct, label),
+        )
+        path_count = svg_text.count("<path ")
+        with trace_lock:
+            job = trace_jobs.get(job_id)
+            if not job or job.get("token") != token or token != trace_generation:
+                return
+            job.update(
+                {
+                    "status": "done",
+                    "progress": 100,
+                    "label": "Trace ready",
+                    "svg_text": svg_text,
+                    "filename": f"{Path(safe_name(request.filename)).stem}_trace.svg",
+                    "path_count": path_count,
+                }
+            )
+    except TraceCanceled:
+        with trace_lock:
+            job = trace_jobs.get(job_id)
+            if job:
+                job.update({"status": "canceled", "progress": 0, "label": "Trace canceled"})
+    except Exception as exc:
+        with trace_lock:
+            job = trace_jobs.get(job_id)
+            if job:
+                job.update({"status": "error", "progress": 0, "label": "Trace failed", "error": str(exc)})
 
 
 def parse_length(value: str | None) -> float | None:
@@ -771,9 +854,6 @@ def trace_edge_paths(
     deadline: float,
 ) -> list[list[tuple[float, float]]]:
     binary = binary_edges_from_image(edges, threshold)
-    edge_density = float(binary.mean())
-    if edge_density > RASTER_TRACE_MAX_EDGE_DENSITY:
-        raise ValueError("Too many edges at this threshold. Raise Edge threshold or lower Trace size.")
 
     skeleton = thin_edge_array(binary, deadline)
     edge_pixels = edge_pixel_set(skeleton)
@@ -781,7 +861,6 @@ def trace_edge_paths(
         return []
 
     paths: list[list[tuple[float, float]]] = []
-    max_paths = 3200
     smoothing_passes = 1 if simplify_px < 0.75 else 2
 
     used: set[tuple[int, int]] = set()
@@ -809,7 +888,7 @@ def trace_edge_paths(
     ]
     paths = [path for path in paths if len(path) >= 2 and path_length(path) >= min_path_px]
     paths.sort(key=path_length, reverse=True)
-    return paths[:max_paths]
+    return paths
 
 
 def odd_kernel_size(value: int, minimum: int = 3) -> int:
@@ -885,10 +964,6 @@ def cv_contour_trace_paths(
     blurred = cv2.GaussianBlur(gray, (3, 3), 0)
     edges = cv2.Canny(blurred, lower, upper, apertureSize=3, L2gradient=True)
 
-    edge_density = float(np.count_nonzero(edges)) / float(edges.size)
-    if edge_density > RASTER_TRACE_MAX_EDGE_DENSITY:
-        raise ValueError("Too many edges at this threshold. Raise Edge threshold or lower Trace size.")
-
     edges[:2, :] = 0
     edges[-2:, :] = 0
     edges[:, :2] = 0
@@ -944,9 +1019,6 @@ def cv_ink_trace_paths(
     ink = cv2.subtract(255, gray)
     ink = cv2.normalize(ink, None, 0, 255, cv2.NORM_MINMAX)
     _, mask = cv2.threshold(ink, max(1, int(threshold)), 255, cv2.THRESH_BINARY)
-    edge_density = float(np.count_nonzero(mask)) / float(mask.size)
-    if edge_density > RASTER_TRACE_MAX_EDGE_DENSITY:
-        raise ValueError("Too much dark ink at this threshold. Raise Edge threshold or lower Trace size.")
 
     component_count, labels, stats, _ = cv2.connectedComponentsWithStats(mask, 8)
     clean = np.zeros_like(mask)
@@ -1028,8 +1100,10 @@ def raster_to_svg(
     max_side: int = 720,
     min_path_px: float = 8.0,
     link_gap_px: float = 5.0,
+    trace_token: int | None = None,
+    progress=None,
 ) -> str:
-    deadline = time.monotonic() + RASTER_TRACE_TIMEOUT_S
+    deadline = trace_token if trace_token is not None else next_trace_token()
     if "," in content and content[:80].lower().startswith("data:"):
         content = content.split(",", 1)[1]
 
@@ -1039,6 +1113,8 @@ def raster_to_svg(
         raise ValueError("Unsupported file. Upload an SVG, PNG, JPG, GIF, BMP, or WebP image.") from exc
 
     try:
+        if progress:
+            progress(10, "Reading image")
         image = Image.open(io.BytesIO(image_bytes))
     except Exception as exc:
         raise ValueError("Could not read that image file.") from exc
@@ -1051,6 +1127,8 @@ def raster_to_svg(
     trace_mode = trace_mode if trace_mode in {"contour", "ink", "legacy"} else "contour"
 
     if trace_mode == "ink":
+        if progress:
+            progress(24, "Tracing ink")
         paths, width, height = cv_ink_trace_paths(
             image,
             threshold,
@@ -1061,6 +1139,8 @@ def raster_to_svg(
             deadline,
         )
     elif trace_mode == "legacy":
+        if progress:
+            progress(24, "Detecting edges")
         paths: list[list[tuple[float, float]]] = []
         fallback_image = ImageOps.exif_transpose(image).convert("L")
         fallback_image.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
@@ -1069,8 +1149,12 @@ def raster_to_svg(
         edges = ImageOps.autocontrast(edges)
         clear_image_border(edges)
         width, height = edges.size
+        if progress:
+            progress(54, "Following edge paths")
         paths = trace_edge_paths(edges, threshold, simplify_px, min_path_px, link_gap_px, deadline)
     else:
+        if progress:
+            progress(24, "Finding contours")
         paths, width, height = cv_contour_trace_paths(
             image,
             threshold,
@@ -1082,6 +1166,8 @@ def raster_to_svg(
         )
 
         if not paths:
+            if progress:
+                progress(54, "Trying ink trace")
             paths, width, height = cv_ink_trace_paths(
                 image,
                 threshold,
@@ -1097,9 +1183,13 @@ def raster_to_svg(
 
     title = html.escape(safe_name(filename))
     path_lines = []
+    if progress:
+        progress(82, "Building svg")
     for index, path in enumerate(paths):
         if index % 50 == 0:
             check_trace_deadline(deadline)
+            if progress and paths:
+                progress(82 + (index / len(paths)) * 14, "Building svg")
         path_lines.append(f'<path d="{svg_path_from_polyline(path)}" />')
     path_markup = "\n  ".join(path_lines)
     return (
@@ -2218,13 +2308,29 @@ class PlotterController:
 
 controller = PlotterController()
 app = FastAPI(title="Plotter Studio")
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/examples", StaticFiles(directory=ROOT / "examples"), name="examples")
+
+
+NO_CACHE_HEADERS = {
+    "Cache-Control": "no-store, max-age=0",
+    "Pragma": "no-cache",
+    "Expires": "0",
+}
 
 
 @app.get("/")
 def index():
-    return FileResponse(STATIC_DIR / "index.html")
+    return FileResponse(STATIC_DIR / "index.html", headers=NO_CACHE_HEADERS)
+
+
+@app.get("/static/{path:path}")
+def static_file(path: str):
+    target = (STATIC_DIR / path).resolve()
+    if STATIC_DIR.resolve() not in target.parents:
+        raise HTTPException(status_code=404, detail="Not found")
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="Not found")
+    return FileResponse(target, headers=NO_CACHE_HEADERS)
 
 
 @app.get("/api/status")
@@ -2302,25 +2408,29 @@ def api_preview(request: SliceRequest):
 
 @app.post("/api/raster/trace")
 def api_raster_trace(request: RasterTraceRequest):
-    try:
-        svg_text = raster_to_svg(
-            request.filename,
-            request.image_data,
-            trace_mode=request.trace_mode,
-            threshold=request.threshold,
-            simplify_px=request.simplify_px,
-            max_side=request.max_side,
-            min_path_px=request.min_path_px,
-            link_gap_px=request.link_gap_px,
-        )
-        path_count = svg_text.count("<path ")
-        return {
-            "svg_text": svg_text,
-            "filename": f"{Path(safe_name(request.filename)).stem}_trace.svg",
-            "path_count": path_count,
-        }
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return start_trace_job(request)
+
+
+@app.get("/api/raster/trace/{job_id}")
+def api_raster_trace_status(job_id: str):
+    with trace_lock:
+        job = trace_jobs.get(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="Trace job not found.")
+        return {key: value for key, value in job.items() if key not in {"token", "created_at"}}
+
+
+@app.post("/api/raster/trace/{job_id}/cancel")
+def api_raster_trace_cancel(job_id: str):
+    global trace_generation
+    with trace_lock:
+        job = trace_jobs.get(job_id)
+        if not job:
+            return {"status": "missing"}
+        if job.get("status") == "running":
+            trace_generation += 1
+            job.update({"status": "canceled", "progress": 0, "label": "Trace canceled"})
+        return {"status": job.get("status", "canceled")}
 
 
 @app.post("/api/settings")

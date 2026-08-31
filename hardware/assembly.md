@@ -34,6 +34,10 @@ external 5V supply for servo
 IRLZ44N N-channel MOSFET for servo power switching
 ```
 
+Reference overview of the current electronics setup:
+
+![Wiring overview](../photos/wiring-overview.jpg)
+
 ## CNC Shield Wiring
 
 Stepper mapping:
@@ -70,6 +74,10 @@ GT2 belt
 The servo is powered through an IRLZ44N N-channel MOSFET so it stays off during
 Arduino boot/reset. This avoids the startup twitch that happened when the servo
 received unstable power or signal during boot.
+
+Breadboard reference for the servo/transistor wiring:
+
+![Servo MOSFET breadboard wiring](../photos/servo-mosfet-breadboard.jpg)
 
 With the IRLZ44N front/text side facing you and legs pointing downward:
 

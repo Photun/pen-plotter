@@ -20,7 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate {
             waitForServer()
         }
 
-        if serverAvailable(), let url = URL(string: "\(serverURL)?v=pen-lift-1") {
+        if serverAvailable(), let url = URL(string: "\(serverURL)?v=trace-let-it-cook-1") {
             webView.load(URLRequest(url: url))
         } else {
             showMessage(

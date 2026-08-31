@@ -1,117 +1,52 @@
 # CoreXY Pen Plotter
 
-A custom CoreXY pen plotter that turns SVGs and traced raster images into real
-pen drawings. The hardware is designed in Onshape, the firmware runs on an
-Arduino Uno with a CNC Shield, and the local Plotter Studio app handles image
-import, slicing, preview, serial control, and sending jobs to the machine.
+A large format Arduino based CoreXY pen plotter with a custom slicer app for turning digital artwork into physical drawings.
 
 ## Why This Exists
 
-I wanted to build a drawing machine from the ground up instead of just copying a
-finished plotter. The interesting part is not only making motors move. It is
-getting the whole chain to behave: CAD, belts, rollers, toolhead, servo lift,
-manual homing, firmware motion, gcode streaming, and a slicer app that makes the
-machine usable without living in terminal forever.
+I built this because I wanted to make a drawing machine from the ground up, not just copy a finished plotter design and wire it exactly the same way. The interesting part became the whole chain working together: the CAD, belts, rollers, moving toolhead, pen lift, manual homing, firmware motion, gcode streaming, and a slicer app that makes the machine usable without typing terminal commands every time. It is still very much a prototype, but it can already take artwork, preview the toolpath, and draw it with a real pen.
 
-The current prototype can draw test SVGs, trace images into vector paths, preview
-toolpaths, and stream jobs over USB serial.
+## Photos And Demo
 
-## Current Features
+Main project photo:
 
-- Arduino Uno + CNC Shield firmware for CoreXY motion.
-- Manual homing with bottom-left as `X0 Y0`.
-- Acceleration-limited motion profile for straight and Bezier moves.
-- Servo pen lift using MOSFET-switched external 5V power to avoid boot twitch.
-- Plotter-specific gcode dialect over USB serial.
-- Plotter Studio desktop/browser app for preparing art, slicing, previewing,
-  live device control, and sending jobs.
-- SVG slicing with cubic Bezier support.
-- Raster image import using OpenCV-assisted tracing modes.
-- Example square and circle files for smoke testing.
+![Main project photo placeholder](photos/main-project-photo-placeholder.svg)
 
-## Project Status
+Demo video:
 
-This is a working prototype, still being prepared for a polished Macondo ship.
+[Plotter running demo video](photos/demo-plotter-running.mp4)
 
-Done:
+## What It Does
 
-- CAD design exists in Onshape.
-- BOM is exported and cleaned.
-- Firmware builds with PlatformIO.
-- Manual motor/servo tests have passed.
-- Plotter Studio app is usable locally.
-- SVG and raster-to-vector workflows exist.
+- Moves a pen toolhead using a CoreXY belt layout.
+- Runs on an Arduino Uno with a CNC Shield V3 and DRV8825 drivers.
+- Uses manual bottom-left homing, with `X0 Y0` as the home position.
+- Lifts the pen with a servo.
+- Switches servo power through a MOSFET so the pen does not twitch during boot.
+- Streams a small plotter-focused gcode dialect over USB serial.
+- Includes Plotter Studio, a local app for importing art, tracing images,
+  preparing the plate, slicing, previewing, tuning motion, and sending jobs.
+- Supports SVG paths and raster-image tracing through OpenCV-based tools.
+- Preserves cubic Bezier curves when possible so curves are smoother than just a
+  pile of short line segments.
 
-Still needed before final shipping:
+## How It Fits Together
 
-- Add build photos and first plot photos to `photos/`.
-- Add a real Macondo thumbnail showing the actual project.
-- Do final mechanical tuning and document any changed dimensions.
-
-## Quick Start
-
-Clone the repo:
-
-```bash
-git clone https://github.com/Photun/pen-plotter.git
-cd pen-plotter
-```
-
-Install PlatformIO for VS Code, then build firmware:
-
-```bash
-cd firmware
-pio run -e uno
-```
-
-Upload to an Arduino Uno:
-
-```bash
-cd firmware
-pio run -e uno -t upload
-```
-
-Build and launch the desktop controller app:
-
-```bash
-cd firmware
-tools/build_macos_app.sh
-open "../Plotter Studio.app"
-```
-
-Or launch the browser version:
-
-```bash
-cd firmware
-python3 -m venv .venv
-.venv/bin/python -m pip install -r tools/requirements.txt
-.venv/bin/python tools/plotter_studio.py
-```
-
-Then open:
+The physical machine is a CoreXY frame with two stepper motors, a belt-driven
+gantry, and a servo pen-lift toolhead. The Arduino Uno runs the realtime motor
+and pen firmware. The computer runs Plotter Studio, which turns images/SVGs into
+gcode and sends one command at a time over USB serial.
 
 ```text
-http://127.0.0.1:8765
+image or SVG
+-> Plotter Studio import/trace
+-> plate setup and slicing
+-> gcode preview
+-> USB serial
+-> Arduino Uno firmware
+-> CNC Shield stepper drivers
+-> CoreXY motors and pen servo
 ```
-
-## Normal Drawing Workflow
-
-1. Upload the firmware to the Arduino Uno.
-2. Launch Plotter Studio.
-3. Connect to the Arduino from the Device tab.
-4. Turn motors off.
-5. Move the toolhead by hand to the bottom-left corner.
-6. Turn motors on.
-7. Press Confirm X0 Y0.
-8. Open or import artwork in Prepare.
-9. Place/scale/rotate it on the plate.
-10. Press Slice Plate.
-11. Check Preview and confirm the slice.
-12. Send the job from Device.
-
-For first tests, use `Load Square` or `Load Circle` in Plotter Studio.
-
-## Hardware Overview
 
 Main electronics:
 
@@ -126,78 +61,82 @@ external 5V servo supply
 IRLZ44N N-channel MOSFET for servo power switching
 ```
 
-Known machine bounds:
+## Build One
 
-```text
-X0 Y0       bottom-left manual home
-X203 Y185   approximate center
-X406 Y370   far corner
-```
+Start with the hardware docs:
 
-Known pin mapping:
+- [Assembly guide](hardware/assembly.md)
+- [Bill of materials](hardware/bom.md)
+- Printable STL files in [hardware/exports/stl](hardware/exports/stl)
+- Full assembly STEP file in [hardware/exports/assembly](hardware/exports/assembly)
 
-```text
-D2  CNC Shield X step = CoreXY motor A step
-D3  CNC Shield Y step = CoreXY motor B step
-D5  CNC Shield X dir  = CoreXY motor A dir
-D6  CNC Shield Y dir  = CoreXY motor B dir
-D8  CNC Shield enable, active LOW
-D11 Z-limit signal -> MOSFET gate for servo power
-D12 SpnEn -> servo signal
-```
-
-## What's In This Repo
-
-```text
-hardware/            assembly guide and BOM
-firmware/            Arduino firmware, Plotter Studio app, scripts, examples
-photos/              build photos, CAD screenshots, plot photos
-```
-
-Most readers should start with `README.md`, then `hardware/assembly.md`, then the
-BOM. The firmware and app folders are mostly implementation details unless you
-are changing code.
-
-Folders you can mostly ignore when just reviewing or building the machine:
-
-```text
-firmware/app/        app frontend internals
-firmware/desktop/    native macOS wrapper source
-firmware/tools/      Python backend and helper scripts
-firmware/examples/   quick test drawings
-hardware/exports/    final CAD exports
-photos/              project photos, once added
-```
-
-Generated local folders such as `.pio/`, `.venv/`, `.plotter-app/`, and
-`Plotter Studio.app/` are not part of the source package.
-
-## Build Files
-
-- `hardware/assembly.md` - main build guide: mechanical assembly, electronics, wiring, first tests
-- `hardware/bom.md` - human-readable bill of materials
-- `hardware/bom.csv` - spreadsheet-friendly bill of materials
-- `firmware/README.md` - Plotter Studio, firmware upload, controls, pin notes
-
-## CAD
-
-Onshape CAD:
+The CAD is also available in Onshape:
 
 ```text
 https://cad.onshape.com/documents/21408afa0678dfc090a39137/w/cada99e8b20e026a88815622/e/614e2d6018b77ddf107765d2?renderMode=0&leftPanel=false&uiState=6a7a26314284ccba60f59ccc
 ```
 
-Exported CAD files are included in `hardware/exports/`: the full assembly STEP
-is in `hardware/exports/assembly/`, and printable STL files are in
-`hardware/exports/stl/`.
+After the machine is assembled and wired, install PlatformIO in VS Code and
+upload the firmware:
 
-## Before Shipping
+```bash
+cd firmware
+pio run -e uno -t upload
+```
 
-Before final Macondo shipping, this repo still needs:
+Then build and launch Plotter Studio from the repo root:
 
-- build photos, CAD screenshots, and first plot photos in `photos/`
-- a good project thumbnail
-- one last pass through the assembly guide with the real final hardware
+```bash
+firmware/tools/build_macos_app.sh
+open "Plotter Studio.app"
+```
+
+For the browser version:
+
+```bash
+cd firmware
+tools/run_plotter_studio.sh
+```
+
+Then open:
+
+```text
+http://127.0.0.1:8765
+```
+
+Normal drawing workflow:
+
+1. Upload the firmware to the Arduino Uno.
+2. Launch Plotter Studio.
+3. Connect to the Arduino from the Device tab.
+4. Turn motors off.
+5. Move the toolhead by hand to the bottom-left corner.
+6. Turn motors on.
+7. Press `Confirm X0 Y0`.
+8. Open or import artwork in Prepare.
+9. Place, scale, and rotate it on the plate.
+10. Press `Slice Plate`.
+11. Check Preview and confirm the slice.
+12. Send the job from Device.
+
+For first tests, use `Load Square` or `Load Circle` in Plotter Studio.
+
+More software instructions are in [firmware/instructions.md](firmware/instructions.md).
+The deeper firmware/app notes are in [firmware/technical-notes.md](firmware/technical-notes.md).
+
+## Repo Layout
+
+```text
+hardware/            assembly guide, BOM, exported CAD/STL files
+firmware/            Arduino firmware, Plotter Studio app, scripts, examples
+photos/              sample plots, wiring photos, demo video
+```
+
+Most readers should start with this README, then `hardware/assembly.md`, then
+`hardware/bom.md`. The firmware internals are mostly for people changing code.
+
+Generated local folders such as `.pio/`, `.venv/`, `.plotter-app/`, and
+`Plotter Studio.app/` are not part of the source package.
 
 ## License
 

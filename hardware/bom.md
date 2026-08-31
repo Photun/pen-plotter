@@ -1,6 +1,6 @@
 # Bill of Materials
 
-This is the readable copy of `hardware/bom.csv`. The CSV is the spreadsheet-friendly source, and this page is for quickly checking the parts list in the repo.
+This is the bill of materials for the current plotter build.
 
 | Name | Quantity | Material | Description |
 | --- | ---: | --- | --- |

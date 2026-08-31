@@ -40,6 +40,7 @@ const state = {
     traceFileName: "",
     tracePreviewUrl: "",
     abortController: null,
+    traceJobId: "",
     seq: 0,
     pending: false,
     progressTimer: 0,
@@ -57,7 +58,6 @@ const START_STEP_DELAY = 600;
 const ROTATION_SNAP_INCREMENT = 45;
 const ROTATION_SNAP_THRESHOLD = 5;
 const EDGE_SNAP_THRESHOLD = 4;
-const TRACE_REQUEST_TIMEOUT_MS = 14000;
 const TRACE_DEFAULTS = {
   mode: "contour",
   threshold: 34,
@@ -71,6 +71,10 @@ const $ = (id) => document.getElementById(id);
 
 function maybe(id) {
   return document.getElementById(id);
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 function paperAreaForMode(mode = "full") {
@@ -2287,6 +2291,10 @@ function resetTraceControls() {
 }
 
 function abortActiveRasterTrace() {
+  if (state.import.traceJobId) {
+    api(`/api/raster/trace/${state.import.traceJobId}/cancel`, { method: "POST" }).catch(() => {});
+    state.import.traceJobId = "";
+  }
   if (state.import.abortController) {
     state.import.abortController.abort();
     state.import.abortController = null;
@@ -2319,25 +2327,8 @@ function hideTaskProgress(prefix) {
 
 function startTraceProgress() {
   window.clearInterval(state.import.progressTimer);
-  state.import.progressStartedAt = performance.now();
-  const stages = [
-    { at: 0, label: "Loading image" },
-    { at: 12, label: "Normalizing contrast" },
-    { at: 28, label: "Detecting edges" },
-    { at: 48, label: "Finding contours" },
-    { at: 68, label: "Cleaning paths" },
-    { at: 84, label: "Building svg" },
-  ];
-
-  const tick = () => {
-    const elapsed = performance.now() - state.import.progressStartedAt;
-    const eased = 92 * (1 - Math.exp(-elapsed / 3800));
-    const stage = stages.reduce((best, item) => (item.at <= eased ? item : best), stages[0]);
-    setTaskProgress("trace", eased, stage.label, true);
-  };
-
-  tick();
-  state.import.progressTimer = window.setInterval(tick, 140);
+  state.import.progressTimer = 0;
+  setTaskProgress("trace", 2, "Queued", true);
 }
 
 function stopTraceProgress(percent = 0, label = "", visible = false) {
@@ -2363,7 +2354,6 @@ async function updateRasterTracePreview() {
   const sequence = ++state.import.seq;
   abortActiveRasterTrace();
   const abortController = new AbortController();
-  const timeoutId = window.setTimeout(() => abortController.abort(), TRACE_REQUEST_TIMEOUT_MS);
   state.import.abortController = abortController;
   state.import.pending = true;
   $("importConfirmBtn").disabled = true;
@@ -2371,7 +2361,7 @@ async function updateRasterTracePreview() {
   startTraceProgress();
 
   try {
-    const result = await api("/api/raster/trace", {
+    const started = await api("/api/raster/trace", {
       method: "POST",
       body: JSON.stringify({
         filename: state.import.fileName,
@@ -2380,11 +2370,34 @@ async function updateRasterTracePreview() {
       }),
       signal: abortController.signal,
     });
+    state.import.traceJobId = started.job_id;
 
-    if (sequence !== state.import.seq) {
+    let result = null;
+    while (sequence === state.import.seq) {
+      const status = await api(`/api/raster/trace/${started.job_id}`, {
+        signal: abortController.signal,
+      });
+      setTaskProgress("trace", status.progress || 0, status.label || "Tracing...", true);
+
+      if (status.status === "done") {
+        result = status;
+        break;
+      }
+      if (status.status === "error") {
+        throw new Error(status.error || "Trace failed");
+      }
+      if (status.status === "canceled") {
+        throw new DOMException("Trace canceled", "AbortError");
+      }
+
+      await sleep(500);
+    }
+
+    if (sequence !== state.import.seq || !result) {
       return;
     }
 
+    state.import.traceJobId = "";
     state.import.traceSvg = result.svg_text;
     state.import.traceFileName = result.filename;
     setTracePreview(result.svg_text);
@@ -2396,7 +2409,7 @@ async function updateRasterTracePreview() {
         state.import.traceSvg = "";
         state.import.traceFileName = "";
         $("importTracePreview").removeAttribute("src");
-        setImportStatus("Trace stopped. Lower Trace size, raise threshold, or increase Min stroke.", true);
+        setImportStatus("Trace canceled.", true);
         stopTraceProgress(0, "Trace stopped", false);
       }
       return;
@@ -2409,11 +2422,11 @@ async function updateRasterTracePreview() {
       stopTraceProgress(0, "Trace failed", false);
     }
   } finally {
-    window.clearTimeout(timeoutId);
     if (state.import.abortController === abortController) {
       state.import.abortController = null;
     }
     if (sequence === state.import.seq) {
+      state.import.traceJobId = "";
       state.import.pending = false;
       $("importConfirmBtn").disabled = !state.import.traceSvg;
     }
@@ -2450,6 +2463,7 @@ function openRasterImportModal(file, imageData) {
     traceFileName: "",
     tracePreviewUrl: state.import.tracePreviewUrl,
     abortController: null,
+    traceJobId: "",
     seq: state.import.seq,
     pending: false,
   };
@@ -2476,6 +2490,7 @@ function closeRasterImportModal() {
   state.import.tracePreviewUrl = "";
   state.import.traceSvg = "";
   state.import.traceFileName = "";
+  state.import.traceJobId = "";
   state.import.pending = false;
   $("importModal").classList.add("hidden");
   $("importModal").setAttribute("aria-hidden", "true");
