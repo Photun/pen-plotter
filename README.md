@@ -10,7 +10,7 @@ I built this because I wanted to make a drawing machine from the ground up, not 
 
 Main project photo:
 
-![Main project photo placeholder](photos/main-project-photo-placeholder.svg)
+![CoreXY pen plotter](photos/plotter-thumbnail.png)
 
 Demo video:
 
@@ -125,6 +125,31 @@ Most readers should start with this README, then `hardware/assembly.md`, then
 
 Generated local folders such as `.pio/`, `.venv/`, `.plotter-app/`, and
 `Plotter Studio.app/` are not part of the source package.
+
+## What I Would Do Differently
+
+The biggest thing I would rethink is tolerance. This project made it really
+obvious that CAD numbers and printed numbers are not the same thing, especially
+with ABS. Warping can change dimensions enough that one part is too tight while
+another part is too loose, even when they were designed with the same logic. The
+toolhead is a little loose in some places, and that costs rigidity, which then
+costs drawing precision.
+
+The rollers also showed this problem. Some spin smoothly, some are too tight,
+and some basically drag instead of rolling. After seeing the actual prints, I
+started wondering if a sliding plastic block in the extrusion groove might have
+been better than round rollers. A roller only touches at a tangent point, while a
+printed rectangular slider could contact the extrusion in a more constrained and
+repeatable way. It might even be more precise, as long as the friction is
+manageable.
+
+The belt clamp mount is another place where I designed the part first and
+thought about assembly second. It works, but it was one of the hardest parts to
+put together. If I rebuilt it, I would probably design more of that toolhead area
+as one piece instead of splitting it into pieces just to avoid supports. I did
+not trust support structures that much while designing this, but after printing
+more parts, I am a lot more willing to use supports for harder shapes if it makes
+the final assembly simpler and stiffer.
 
 ## License
 
