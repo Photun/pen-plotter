@@ -55,6 +55,7 @@ Start with the hardware docs:
 - [Assembly guide](hardware/assembly.md)
 - [Bill of materials](hardware/bom.md)
 - Printable STL files in [hardware/exports/stl](hardware/exports/stl)
+- Printable STEP files in [hardware/exports/step](hardware/exports/step)
 - Full assembly STEP file in [hardware/exports/assembly](hardware/exports/assembly)
 
 The CAD is also available in Onshape:
