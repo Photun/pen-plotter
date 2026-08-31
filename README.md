@@ -76,7 +76,7 @@ Build and launch the desktop controller app:
 ```bash
 cd firmware
 tools/build_macos_app.sh
-open "Plotter Studio.app"
+open "../Plotter Studio.app"
 ```
 
 Or launch the browser version:

@@ -1,24 +1,25 @@
 #!/bin/zsh
 set -e
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-APP="$ROOT/Plotter Studio.app"
+FIRMWARE_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+REPO_ROOT="$(cd "$FIRMWARE_ROOT/.." && pwd)"
+APP="$REPO_ROOT/Plotter Studio.app"
 
-if [ ! -x "$ROOT/.venv/bin/python" ]; then
-  python3 -m venv "$ROOT/.venv"
+if [ ! -x "$FIRMWARE_ROOT/.venv/bin/python" ]; then
+  /usr/bin/python3 -m venv "$FIRMWARE_ROOT/.venv"
 fi
 
-"$ROOT/.venv/bin/python" -m pip install -r "$ROOT/tools/requirements.txt"
+"$FIRMWARE_ROOT/.venv/bin/python" -m pip install -r "$FIRMWARE_ROOT/tools/requirements.txt"
 
 mkdir -p "$APP/Contents/MacOS"
 mkdir -p "$APP/Contents/Resources"
 
-swiftc "$ROOT/desktop/macos/PlotterStudio.swift" \
+swiftc "$FIRMWARE_ROOT/desktop/macos/PlotterStudio.swift" \
   -framework Cocoa \
   -framework WebKit \
   -o "$APP/Contents/MacOS/Plotter Studio"
 
-cp "$ROOT/desktop/macos/Info.plist" "$APP/Contents/Info.plist"
+cp "$FIRMWARE_ROOT/desktop/macos/Info.plist" "$APP/Contents/Info.plist"
 chmod +x "$APP/Contents/MacOS/Plotter Studio"
 
 echo "Built $APP"

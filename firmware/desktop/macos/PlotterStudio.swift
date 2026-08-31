@@ -13,8 +13,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         createWindow()
 
-        if !serverAvailable() {
+        if !serverAvailable() && ProcessInfo.processInfo.environment["PLOTTER_STUDIO_BACKEND_READY"] == nil {
             startServer()
+            waitForServer()
+        } else if !serverAvailable() {
             waitForServer()
         }
 
@@ -67,14 +69,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate {
         window.makeKeyAndOrderFront(nil)
     }
 
-    func repoRoot() -> URL {
+    func repoRoot() -> URL? {
         let appParent = Bundle.main.bundleURL.deletingLastPathComponent()
-        let expected = appParent.appendingPathComponent("tools/plotter_studio.py")
-        if FileManager.default.fileExists(atPath: expected.path) {
-            return appParent
-        }
+        let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let candidates = [
+            appParent.appendingPathComponent("firmware", isDirectory: true),
+            appParent,
+            cwd.appendingPathComponent("firmware", isDirectory: true),
+            cwd
+        ]
 
-        return URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        return candidates.first { root in
+            FileManager.default.fileExists(
+                atPath: root.appendingPathComponent("tools/plotter_studio.py").path
+            )
+        }
     }
 
     func serverAvailable() -> Bool {
@@ -94,7 +103,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate {
     }
 
     func startServer() {
-        let root = repoRoot()
+        guard let root = repoRoot() else {
+            showMessage(
+                title: "Plotter Studio could not find firmware",
+                body: "Move Plotter Studio.app back into the pen-plotter repo folder, next to the firmware folder."
+            )
+            return
+        }
+
         let dataDir = root.appendingPathComponent(".plotter-app", isDirectory: true)
         try? FileManager.default.createDirectory(at: dataDir, withIntermediateDirectories: true)
 
@@ -102,15 +118,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate {
         FileManager.default.createFile(atPath: logURL.path, contents: nil)
         logHandle = try? FileHandle(forWritingTo: logURL)
         _ = try? logHandle?.seekToEnd()
-
-        preparePythonEnvironment(root: root)
+        writeLog("starting Plotter Studio from \(root.path)")
 
         let python = root.appendingPathComponent(".venv/bin/python")
         let server = root.appendingPathComponent("tools/plotter_studio.py")
+        writeLog("launching backend with \(python.path) \(server.path)")
         let process = Process()
         process.executableURL = python
         process.arguments = [server.path]
-        process.currentDirectoryURL = root
+        process.currentDirectoryURL = URL(fileURLWithPath: "/tmp", isDirectory: true)
+        process.environment = [
+            "PATH": "/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+            "PYTHONUNBUFFERED": "1"
+        ]
         if let handle = logHandle {
             process.standardOutput = handle
             process.standardError = handle
@@ -119,34 +139,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate {
         do {
             try process.run()
             serverProcess = process
+            writeLog("backend process started, pid \(process.processIdentifier)")
         } catch {
-            showMessage(title: "Could not launch backend", body: error.localizedDescription)
+            writeLog("backend launch failed: \(error.localizedDescription)")
+            showMessage(title: "Could not launch backend", body: "\(error.localizedDescription)\n\nLog: \(logURL.path)")
         }
     }
 
-    func preparePythonEnvironment(root: URL) {
-        let python = root.appendingPathComponent(".venv/bin/python")
-
-        if !FileManager.default.fileExists(atPath: python.path) {
-            _ = runCommand(
-                executable: "/usr/bin/python3",
-                arguments: ["-m", "venv", root.appendingPathComponent(".venv").path],
-                cwd: root
-            )
-        }
-
-        let importCheck = runCommand(
-            executable: python.path,
-            arguments: ["-c", "import cv2, fastapi, numpy, scipy, serial, svgpathtools, uvicorn, PIL"],
-            cwd: root
-        )
-
-        if importCheck != 0 {
-            _ = runCommand(
-                executable: python.path,
-                arguments: ["-m", "pip", "install", "-r", root.appendingPathComponent("tools/requirements.txt").path],
-                cwd: root
-            )
+    func writeLog(_ message: String) {
+        let line = "[desktop] \(message)\n"
+        if let data = line.data(using: .utf8) {
+            try? logHandle?.write(contentsOf: data)
         }
     }
 

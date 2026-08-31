@@ -27,7 +27,7 @@ Build the Mac app:
 
 ```bash
 tools/build_macos_app.sh
-open "Plotter Studio.app"
+open "../Plotter Studio.app"
 ```
 
 Or run the browser version:
