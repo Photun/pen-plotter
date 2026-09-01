@@ -191,6 +191,18 @@ def start_trace_job(request: RasterTraceRequest) -> dict[str, str]:
     return {"job_id": job_id}
 
 
+def cancel_all_trace_jobs() -> dict[str, Any]:
+    global trace_generation
+    with trace_lock:
+        trace_generation += 1
+        canceled = 0
+        for job in trace_jobs.values():
+            if job.get("status") == "running":
+                job.update({"status": "canceled", "progress": 0, "label": "Trace canceled"})
+                canceled += 1
+        return {"status": "canceled", "canceled": canceled}
+
+
 def trace_job_progress(job_id: str, progress: float, label: str) -> None:
     with trace_lock:
         job = trace_jobs.get(job_id)
@@ -266,6 +278,33 @@ def svg_height(attributes: dict[str, str], fallback: float | None = None) -> flo
         return fallback
 
     raise ValueError("Could not determine SVG height.")
+
+
+def parse_view_box(attributes: dict[str, str]) -> tuple[float, float, float, float] | None:
+    view_box = attributes.get("viewBox")
+    if not view_box:
+        return None
+    try:
+        parts = [float(part) for part in re.split(r"[\s,]+", view_box.strip()) if part]
+    except ValueError:
+        return None
+    if len(parts) != 4 or parts[2] <= 0 or parts[3] <= 0:
+        return None
+    return parts[0], parts[1], parts[2], parts[3]
+
+
+def svg_document_bounds(attributes: dict[str, str]) -> tuple[float, float, float, float] | None:
+    view_box = parse_view_box(attributes)
+    if view_box:
+        x, y, width, height = view_box
+        return x, x + width, y, y + height
+
+    width = parse_length(attributes.get("width"))
+    height = parse_length(attributes.get("height"))
+    if width is not None and height is not None and width > 0 and height > 0:
+        return 0.0, width, 0.0, height
+
+    return None
 
 
 def source_bounds(paths: list[Any]) -> tuple[float, float, float, float]:
@@ -1194,6 +1233,7 @@ def raster_to_svg(
     path_markup = "\n  ".join(path_lines)
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+        f'data-plotter-fit="frame" '
         f'viewBox="0 0 {width} {height}">\n'
         f'  <title>{title}</title>\n'
         f'  <g fill="none" stroke="black" stroke-width="1" stroke-linecap="round">\n'
@@ -1577,16 +1617,26 @@ def slice_svg(request: SliceRequest) -> dict[str, Any]:
     svg_text = upload_text_to_svg(source_name, request.svg_text)
     if not source_name.lower().endswith(".svg"):
         source_name = f"{Path(source_name).stem}_trace.svg"
-    svg_path = UPLOAD_DIR / source_name
+    svg_path = UPLOAD_DIR / f"{uuid.uuid4().hex}_{source_name}"
     svg_path.write_text(svg_text, encoding="utf-8")
-
-    paths, _attrs, svg_attrs = svg2paths2(str(svg_path))
+    try:
+        paths, _attrs, svg_attrs = svg2paths2(str(svg_path))
+    finally:
+        try:
+            svg_path.unlink()
+        except OSError:
+            pass
     height = svg_height(svg_attrs)
     xmin, xmax, ymin, ymax = source_bounds(paths)
-    source_width = max(xmax - xmin, 0.001)
-    source_height = max(ymax - ymin, 0.001)
-    source_center_x = (xmin + xmax) / 2.0
-    source_center_y = ((height - ymax) + (height - ymin)) / 2.0
+    fit_bounds = source_bounds(paths)
+    use_document_frame = svg_attrs.get("data-plotter-fit") == "frame" or source_name.lower().endswith("_trace.svg")
+    if use_document_frame:
+        fit_bounds = svg_document_bounds(svg_attrs) or fit_bounds
+    fit_xmin, fit_xmax, fit_ymin, fit_ymax = fit_bounds
+    source_width = max(fit_xmax - fit_xmin, 0.001)
+    source_height = max(fit_ymax - fit_ymin, 0.001)
+    source_center_x = (fit_xmin + fit_xmax) / 2.0
+    source_center_y = ((height - fit_ymax) + (height - fit_ymin)) / 2.0
 
     if settings.fit_to_bed:
         available_x = max(paper["width"] - 2 * settings.margin, 1.0)
@@ -2409,6 +2459,11 @@ def api_preview(request: SliceRequest):
 @app.post("/api/raster/trace")
 def api_raster_trace(request: RasterTraceRequest):
     return start_trace_job(request)
+
+
+@app.post("/api/raster/trace/cancel-all")
+def api_raster_trace_cancel_all():
+    return cancel_all_trace_jobs()
 
 
 @app.get("/api/raster/trace/{job_id}")

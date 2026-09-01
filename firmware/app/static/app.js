@@ -223,15 +223,15 @@ function setSelectedArtwork(id) {
   scheduleDraw();
 }
 
-function addArtwork(fileName, svgText) {
+function addArtwork(fileName, svgText, options = {}) {
   const artwork = {
     id: state.nextArtworkId++,
     fileName,
     svgText,
-    transform: null,
-    preview: null,
-    stats: null,
-    warnings: [],
+    transform: options.transform || null,
+    preview: options.preview || null,
+    stats: options.stats || null,
+    warnings: options.warnings || [],
   };
   state.artworks.push(artwork);
   state.selectedArtworkId = artwork.id;
@@ -246,6 +246,9 @@ function deleteSelectedArtwork() {
   pushUndo();
   state.artworks = state.artworks.filter((artwork) => artwork.id !== selected.id);
   state.selectedArtworkId = state.artworks.length ? state.artworks[state.artworks.length - 1].id : null;
+  state.preparePreviewSeq += 1;
+  state.preparePreviewPending = false;
+  window.clearTimeout(preparePreviewTimer);
   syncLegacyArtworkFields();
   rebuildPreparePreviewFromArtworks();
   updateFileSummary();
@@ -258,6 +261,9 @@ function clearAllArtworks() {
   state.artworks = [];
   state.selectedArtworkId = null;
   state.nextArtworkId = 1;
+  state.preparePreviewSeq += 1;
+  state.preparePreviewPending = false;
+  window.clearTimeout(preparePreviewTimer);
   syncLegacyArtworkFields();
   rebuildPreparePreviewFromArtworks();
   updateFileSummary();
@@ -304,6 +310,197 @@ function settingsForArtwork(artwork) {
     pen_down_delay: Number($("livePenDownDelayInput").value),
     pen_up_lift_percent: Number($("livePenUpLiftInput").value),
     sample_mm: CURVE_SAMPLE_MM,
+  };
+}
+
+function parseSvgNumber(value) {
+  if (!value) return null;
+  const match = String(value).match(/[-+]?\d*\.?\d+/);
+  return match ? Number(match[0]) : null;
+}
+
+function parseSvgFrame(svgText) {
+  const doc = new DOMParser().parseFromString(svgText, "image/svg+xml");
+  if (doc.querySelector("parsererror")) {
+    return null;
+  }
+
+  const svg = doc.documentElement;
+  if (!svg || svg.tagName.toLowerCase() !== "svg") {
+    return null;
+  }
+
+  const viewBox = svg.getAttribute("viewBox");
+  if (viewBox) {
+    const parts = viewBox.trim().split(/[\s,]+/).map(Number).filter(Number.isFinite);
+    if (parts.length === 4 && parts[2] > 0 && parts[3] > 0) {
+      return { svg, x: parts[0], y: parts[1], width: parts[2], height: parts[3] };
+    }
+  }
+
+  const width = parseSvgNumber(svg.getAttribute("width"));
+  const height = parseSvgNumber(svg.getAttribute("height"));
+  if (width && height && width > 0 && height > 0) {
+    return { svg, x: 0, y: 0, width, height };
+  }
+
+  return null;
+}
+
+function transformSvgPoint(x, y, frame, transform) {
+  const localX = (x - (frame.x + frame.width / 2)) * transform.scaleX;
+  const localY = (frame.y + frame.height / 2 - y) * transform.scaleY;
+  const radians = (transform.rotation || 0) * Math.PI / 180;
+  const cosA = Math.cos(radians);
+  const sinA = Math.sin(radians);
+  return [
+    transform.offsetX + localX * cosA - localY * sinA,
+    transform.offsetY + localX * sinA + localY * cosA,
+  ];
+}
+
+function selectionFromFrameTransform(frame, transform) {
+  const width = frame.width * transform.scaleX;
+  const height = frame.height * transform.scaleY;
+  const angle = (transform.rotation || 0) * Math.PI / 180;
+  const cosA = Math.cos(angle);
+  const sinA = Math.sin(angle);
+  const center = { x: transform.offsetX, y: transform.offsetY };
+  const rotate = (localX, localY) => ({
+    x: center.x + localX * cosA - localY * sinA,
+    y: center.y + localX * sinA + localY * cosA,
+  });
+  const halfW = width / 2;
+  const halfH = height / 2;
+  const handleDefs = [
+    ["nw", -halfW, halfH],
+    ["n", 0, halfH],
+    ["ne", halfW, halfH],
+    ["e", halfW, 0],
+    ["se", halfW, -halfH],
+    ["s", 0, -halfH],
+    ["sw", -halfW, -halfH],
+    ["w", -halfW, 0],
+  ];
+
+  return {
+    center,
+    width,
+    height,
+    rotation: transform.rotation || 0,
+    corners: [
+      rotate(-halfW, halfH),
+      rotate(halfW, halfH),
+      rotate(halfW, -halfH),
+      rotate(-halfW, -halfH),
+    ],
+    handles: handleDefs.map(([name, x, y]) => ({ name, ...rotate(x, y) })),
+    rotate_handle: rotate(0, halfH + 30),
+  };
+}
+
+function fitTransformForFrame(frame) {
+  const paper = currentPaperArea();
+  const margin = Math.max(0, Number($("marginInput").value || 0));
+  const availableX = Math.max(paper.width - margin * 2, 1);
+  const availableY = Math.max(paper.height - margin * 2, 1);
+  const scale = $("fitToBed").checked
+    ? Math.min(availableX / frame.width, availableY / frame.height)
+    : 1;
+
+  return {
+    scaleX: scale,
+    scaleY: scale,
+    offsetX: (paper.x_min + paper.x_max) / 2,
+    offsetY: (paper.y_min + paper.y_max) / 2,
+    rotation: 0,
+  };
+}
+
+function buildDraftPreviewFromSvg(svgText) {
+  const frame = parseSvgFrame(svgText);
+  if (!frame) {
+    return null;
+  }
+
+  const transform = fitTransformForFrame(frame);
+  const paths = [];
+  const pathElements = Array.from(frame.svg.querySelectorAll("path"));
+  let sampledPoints = 0;
+  const maxPoints = 50000;
+  const maxPaths = 1200;
+
+  for (const sourcePath of pathElements) {
+    if (sampledPoints >= maxPoints || paths.length >= maxPaths) break;
+    const d = sourcePath.getAttribute("d");
+    if (!d) continue;
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", d);
+    let length = 0;
+    try {
+      length = path.getTotalLength();
+    } catch {
+      continue;
+    }
+    if (!Number.isFinite(length) || length <= 0) continue;
+
+    const samples = Math.max(2, Math.min(120, Math.ceil(length / 8)));
+    const previewPath = [];
+    for (let index = 0; index <= samples && sampledPoints < maxPoints; index += 1) {
+      const point = path.getPointAtLength((length * index) / samples);
+      const [x, y] = transformSvgPoint(point.x, point.y, frame, transform);
+      previewPath.push([Number(x.toFixed(3)), Number(y.toFixed(3))]);
+      sampledPoints += 1;
+    }
+    if (previewPath.length >= 2) {
+      paths.push(previewPath);
+    }
+  }
+
+  const selection = selectionFromFrameTransform(frame, transform);
+  const bounds = selectionBounds(selection);
+  const paper = currentPaperArea();
+  const margin = Math.max(0, Number($("marginInput").value || 0));
+  const withinPaper = bounds.minX >= paper.x_min && bounds.maxX <= paper.x_max
+    && bounds.minY >= paper.y_min && bounds.maxY <= paper.y_max;
+  const withinMachine = bounds.minX >= 0 && bounds.maxX <= MACHINE_X_MAX
+    && bounds.minY >= 0 && bounds.maxY <= MACHINE_Y_MAX;
+  const withinMargin = margin <= 0 || (
+    bounds.minX >= paper.x_min + margin
+    && bounds.maxX <= paper.x_max - margin
+    && bounds.minY >= paper.y_min + margin
+    && bounds.maxY <= paper.y_max - margin
+  );
+
+  return {
+    transform,
+    preview: {
+      paths,
+      bounds: {
+        min_x: Number(bounds.minX.toFixed(3)),
+        max_x: Number(bounds.maxX.toFixed(3)),
+        min_y: Number(bounds.minY.toFixed(3)),
+        max_y: Number(bounds.maxY.toFixed(3)),
+      },
+      machine: { x_max: MACHINE_X_MAX, y_max: MACHINE_Y_MAX },
+      paper,
+      margin,
+      selection,
+    },
+    stats: {
+      line_count: paths.length,
+      draw_moves: Math.max(0, sampledPoints - paths.length),
+      curve_moves: 0,
+      travel_moves: Math.max(0, paths.length - 1),
+      travel_distance_saved: 0,
+      within_bounds: withinMachine && withinPaper,
+      within_machine: withinMachine,
+      within_paper: withinPaper,
+      within_margin: withinMargin,
+      paper_mode: paper.mode,
+      paper,
+    },
+    warnings: withinMargin ? [] : ["Toolpath enters the selected paper margin safety area."],
   };
 }
 
@@ -448,15 +645,31 @@ function markSliceDirty(message = "Slice required") {
   scheduleDraw();
 }
 
-function resetPrepareTransform() {
+function resetPrepareTransform(options = {}) {
+  const clearPreview = Boolean(options.clearPreview);
+  const rebuildDraft = Boolean(options.rebuildDraft);
+  let draftedAll = true;
   for (const artwork of state.artworks) {
     artwork.transform = null;
-    artwork.preview = null;
-    artwork.stats = null;
-    artwork.warnings = [];
+    if (rebuildDraft) {
+      const draft = buildDraftPreviewFromSvg(artwork.svgText);
+      if (draft) {
+        artwork.transform = draft.transform;
+        artwork.preview = draft.preview;
+        artwork.stats = draft.stats;
+        artwork.warnings = draft.warnings;
+      } else {
+        draftedAll = false;
+      }
+    } else if (clearPreview) {
+      artwork.preview = null;
+      artwork.stats = null;
+      artwork.warnings = [];
+    }
   }
   syncLegacyArtworkFields();
   rebuildPreparePreviewFromArtworks();
+  return draftedAll;
 }
 
 function hasCurrentSlice() {
@@ -1340,12 +1553,15 @@ function renderSendButtons() {
   const sliceButton = maybe("sliceBtn");
   if (sliceButton) {
     const offPlate = sliceBlockedByBounds();
+    const updatingPlacement = state.preparePreviewPending && Boolean(state.preparePreview?.paths?.length);
     sliceButton.disabled = isRunning || !state.artworks.length || offPlate || state.preparePreviewPending;
-    sliceButton.textContent = state.preparePreviewPending
-      ? "Checking..."
-      : offPlate
-        ? sliceBlockLabel()
-        : "Slice Plate";
+    sliceButton.textContent = !state.artworks.length
+      ? "Slice Plate"
+      : state.preparePreviewPending
+        ? (updatingPlacement ? "Updating..." : "Checking...")
+        : offPlate
+          ? sliceBlockLabel()
+          : "Slice Plate";
     sliceButton.title = offPlate
       ? "Move or scale the drawing inside the selected paper/canvas before slicing."
       : "";
@@ -2291,6 +2507,7 @@ function resetTraceControls() {
 }
 
 function abortActiveRasterTrace() {
+  api("/api/raster/trace/cancel-all", { method: "POST" }).catch(() => {});
   if (state.import.traceJobId) {
     api(`/api/raster/trace/${state.import.traceJobId}/cancel`, { method: "POST" }).catch(() => {});
     state.import.traceJobId = "";
@@ -2439,6 +2656,16 @@ function queueRasterTracePreview() {
   updateTraceLabels();
   state.import.seq += 1;
   abortActiveRasterTrace();
+  if (!state.import.open || !state.import.imageData) {
+    window.clearTimeout(rasterTraceTimer);
+    state.import.pending = false;
+    state.import.traceSvg = "";
+    state.import.traceFileName = "";
+    $("importConfirmBtn").disabled = true;
+    setImportStatus("Waiting for image");
+    stopTraceProgress(0, "", false);
+    return;
+  }
   stopTraceProgress(0, "Tracing...", state.import.open);
   state.import.traceSvg = "";
   state.import.traceFileName = "";
@@ -2507,13 +2734,21 @@ async function confirmRasterImport() {
     return;
   }
 
-  state.svgText = state.import.traceSvg;
-  state.fileName = state.import.traceFileName || `${state.import.fileName.replace(/\.[^.]+$/, "")}_trace.svg`;
+  const traceSvg = state.import.traceSvg;
+  const traceFileName = state.import.traceFileName || `${state.import.fileName.replace(/\.[^.]+$/, "")}_trace.svg`;
+  const draft = buildDraftPreviewFromSvg(traceSvg);
+  state.svgText = traceSvg;
+  state.fileName = traceFileName;
   pushUndo();
-  addArtwork(state.fileName, state.svgText);
+  addArtwork(traceFileName, traceSvg, draft || {});
   invalidateSlice("Image imported. Slice plate to preview.");
+  if (draft) {
+    rebuildPreparePreviewFromArtworks();
+  }
   closeRasterImportModal();
-  await refreshPreparePreview().catch((error) => showToast(error.message, true));
+  setActiveTab("prepare");
+  renderSendButtons();
+  scheduleDraw();
 }
 
 function isEditingText(event) {
@@ -2612,21 +2847,30 @@ function bindEvents() {
   }
   $("fitToBed").addEventListener("change", () => {
     pushUndo();
-    resetPrepareTransform();
+    const draftedAll = resetPrepareTransform({ rebuildDraft: true });
     invalidateSlice("Process changed. Slice plate again.");
-    queuePreparePreview();
+    rebuildPreparePreviewFromArtworks();
+    if (!draftedAll) {
+      queuePreparePreview();
+    }
   });
   $("paperModeInput").addEventListener("change", () => {
     pushUndo();
-    resetPrepareTransform();
+    const draftedAll = resetPrepareTransform({ rebuildDraft: true });
     invalidateSlice("Paper changed. Slice plate again.");
-    queuePreparePreview();
+    rebuildPreparePreviewFromArtworks();
+    if (!draftedAll) {
+      queuePreparePreview();
+    }
   });
   $("marginInput").addEventListener("input", () => {
     pushUndo();
-    resetPrepareTransform();
+    const draftedAll = resetPrepareTransform({ rebuildDraft: true });
     invalidateSlice("Process changed. Slice plate again.");
-    queuePreparePreview();
+    rebuildPreparePreviewFromArtworks();
+    if (!draftedAll) {
+      queuePreparePreview();
+    }
   });
 
   const plateCanvas = $("plateCanvas");
@@ -2680,7 +2924,9 @@ async function init() {
   bindEvents();
   updateRangeLabels();
   await pollStatus();
-  await loadExample("square").catch((error) => showToast(error.message, true));
+  updateFileSummary();
+  rebuildPreparePreviewFromArtworks();
+  invalidateSlice("No plate sliced");
   renderSendButtons();
   window.setInterval(pollStatus, 900);
 }

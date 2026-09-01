@@ -120,5 +120,3 @@ kits, leftovers, or optional tools. If someone already has filament, fasteners,
 a power supply, jumper wires, or cutting tools, the real extra cost will be much
 lower than buying every source group from scratch.
 
-For reimbursement/shipping forms, use the purchase group rows as the buying
-list. Use the itemized tables to explain where each kit part goes in the build.
