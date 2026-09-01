@@ -4,7 +4,7 @@ A large format Arduino based CoreXY pen plotter with a custom slicer app for tur
 
 ## Why This Exists
 
-I built this because I wanted to make a drawing machine from the ground up, not just copy a finished plotter design and wire it exactly the same way. The interesting part became the whole chain working together: the CAD, belts, rollers, moving toolhead, pen lift, manual homing, firmware motion, gcode streaming, and a slicer app that makes the machine usable without typing terminal commands every time. It is still very much a prototype, but it can already take artwork, preview the toolpath, and draw it with a real pen.
+I intialliy built this beucase I got tired of having to hand trace digital drawings onto paper for art projects, and I wanted to build something that could not only accomodate large poster sizes but also do it with much more precision. So thats why I build this large CoreXY Plotter. I've seen a lot of plotters out there, but none are as big as what I've designed, nor are they as cheap as mine. Mine doens't use large expensive linear rails or flexible rods, but instead uses rollers to utilize extrusions as the strong gantry while having customizeable sizes. It is mostly 3D printer parts or common hardware parts, no rare or expensive parts. It's rigidity allows it to draw even large desgisn with high precision and repeatability. It can accomodate both pen or pencil, so with more complex code it could probably imitate human handwriting, though obviously not 100%. The design is very human. 
 
 ## Photos And Demo
 

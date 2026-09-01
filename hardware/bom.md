@@ -120,3 +120,10 @@ kits, leftovers, or optional tools. If someone already has filament, fasteners,
 a power supply, jumper wires, or cutting tools, the real extra cost will be much
 lower than buying every source group from scratch.
 
+Using the listed Amazon prices for the main required purchase groups, the build
+lands around **$180-$260 USD** if the builder already has common project
+supplies like wire, resistors, breadboard, power supplies, basic tools, and
+filament. Buying every support item from scratch can push the practical total
+closer to **$230-$350 USD**, depending on the exact connector kit, MOSFET pack,
+filament rolls, cutting tools, and what hardware assortments the builder already
+owns.
