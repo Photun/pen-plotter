@@ -18,34 +18,44 @@ Demo video:
 
 ## What It Does
 
-- Moves a pen toolhead using a CoreXY belt layout.
-- Runs on an Arduino Uno with a CNC Shield V3 and DRV8825 drivers.
-- Uses manual bottom-left homing, with `X0 Y0` as the home position.
-- Lifts the pen with a servo.
-- Switches servo power through a MOSFET so the pen does not twitch during boot.
-- Streams a small plotter-focused gcode dialect over USB serial.
-- Includes Plotter Studio, a local app for importing art, tracing images,
-  preparing the plate, slicing, previewing, tuning motion, and sending jobs.
-- Supports SVG paths and raster-image tracing through OpenCV-based tools.
-- Preserves cubic Bezier curves when possible so curves are smoother than just a
-  pile of short line segments.
+This project is meant to make large physical line drawings from normal digital
+artwork without needing a commercial plotter or a bunch of expensive motion
+hardware. The machine can draw across a large work area, but the software can
+also limit the usable area to a centered letter-size sheet so smaller paper can
+be taped down in a repeatable location.
+
+The custom Plotter Studio app is the main usability feature. It can import SVGs
+or trace raster images, show the drawing on a plate, let the user move, scale,
+rotate, and delete artwork, then slice the plate into gcode and send it directly
+to the Arduino over USB. The device tab also replaces the usual pile of terminal
+commands with buttons for connection, manual homing, jogging, pen control, live
+speed/accel tuning, job progress, and a small live job map.
+
+The firmware is intentionally small enough to run on an Arduino Uno, but still
+handles the plotter-specific details: CoreXY motor conversion, absolute gcode
+movement, manual home confirmation, trapezoid-style acceleration, interruptible
+jobs, servo pen up/down timing, and MOSFET-controlled servo power to avoid the
+boot twitch problem.
 
 ## How It Fits Together
 
-The physical machine is a CoreXY frame with two stepper motors, a belt-driven
-gantry, and a servo pen-lift toolhead. The Arduino Uno runs the realtime motor
-and pen firmware. The computer runs Plotter Studio, which turns images/SVGs into
-gcode and sends one command at a time over USB serial.
+There are three main layers. The hardware is the large CoreXY frame, rollers,
+belts, gantry, and pen toolhead. The firmware is the real-time layer that turns
+gcode into step pulses and pen movements. Plotter Studio is the computer-side
+layer that handles the messy human workflow: importing art, fitting it to the
+selected drawing area, generating gcode, previewing the result, and streaming the
+job.
 
 ```text
 image or SVG
--> Plotter Studio import/trace
--> plate setup and slicing
+-> import/trace in Plotter Studio
+-> place artwork on full canvas or letter paper area
+-> slice plate into plotter gcode
 -> gcode preview
--> USB serial
--> Arduino Uno firmware
--> CNC Shield stepper drivers
--> CoreXY motors and pen servo
+-> stream over USB serial
+-> Arduino firmware plans motion
+-> CNC Shield drives the CoreXY motors
+-> servo lifts/drops the pen
 ```
 
 ## Build One
