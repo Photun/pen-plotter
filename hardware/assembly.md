@@ -5,6 +5,9 @@ plotter. The CAD and BOM remain the source of truth for mechanical part shapes
 and counts; this file records the build order, electronics, wiring, and first
 motion checks.
 
+If you are building this and get stuck, feel free to reach out:
+bcliu09@gmail.com.
+
 ## Mechanical Build
 
 CAD reference render:
