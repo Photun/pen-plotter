@@ -20,43 +20,27 @@ Demo video:
 
 This project is meant to make large physical line drawings from normal digital
 artwork without needing a commercial plotter or a bunch of expensive motion
-hardware. The machine can draw across a large work area, but the software can
-also limit the usable area to a centered letter size sheet so smaller paper can
-be taped down in a repeatable location.
+hardware. The machine can be used on large poster sized paper, but can also be
+configured to only draw on a mapped smaller size paper through the application.
 
-The custom Plotter Studio app is the main usability feature. It can import SVGs
-or trace raster images, show the drawing on a plate, let the user move, scale,
-rotate, and delete artwork, then slice the plate into gcode and send it directly
-to the Arduino over USB. The device tab also replaces the usual pile of terminal
-commands with buttons for connection, manual homing, jogging, pen control, live
+The custom Plotter Studio app is the main usability feature. It allows you to import SVGs
+or trace raster images, preview and adjust your drawing, then slice the plate into gcode
+ and send it directly to the Arduino over USB. The device tab also replaces the usual pile of terminal commands with buttons for connection, manual homing, jogging, pen control, live
 speed/accel tuning, job progress, and a small live job map.
 
-The firmware is intentionally small enough to run on an Arduino Uno, but still
-handles the plotter specific details: CoreXY motor conversion, absolute gcode
-movement, manual home confirmation, trapezoid style acceleration, interruptible
-jobs, servo pen up/down timing, and MOSFET controlled servo power to avoid the
+The firmware is intentionally simple enough to run on an Arduino Uno, but still
+handles the plotter's key features: CoreXY motor conversion, absolute gcode
+movement, manual home confirmation, trapezoid style acceleration, task interjection,
+servo pen up/down timing, and MOSFET controlled servo power to avoid the
 boot twitch problem.
 
 ## How It Fits Together
 
-There are three main layers. The hardware is the large CoreXY frame, rollers,
-belts, gantry, and pen toolhead. The firmware is the real time layer that turns
-gcode into step pulses and pen movements. Plotter Studio is the computer side
-layer that handles the messy human workflow: importing art, fitting it to the
-selected drawing area, generating gcode, previewing the result, and streaming the
-job.
-
-```text
-image or SVG
--> import/trace in Plotter Studio
--> place artwork on full canvas or letter paper area
--> slice plate into plotter gcode
--> gcode preview
--> stream over USB serial
--> Arduino firmware plans motion
--> CNC Shield drives the CoreXY motors
--> servo lifts/drops the pen
-```
+The hardware is the large CoreXY frame, rollers, belts, gantry, and pen toolhead. 
+The firmware is the real time layer that turns gcode into step pulses and pen movements. 
+Plotter Studio is the computer side layer that turns art into motor instructions from user input.
+The user imports art, fits it to the selected drawing area, generates gcode, provides the 
+preview, and streams it to the Uno firmware.
 
 ## Build One
 
