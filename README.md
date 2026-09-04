@@ -23,7 +23,7 @@ artwork without needing a commercial plotter or a bunch of expensive motion
 hardware. The machine can be used on large poster sized paper, but can also be
 configured to only draw on a mapped smaller size paper through the application.
 
-The custom Plotter Studio app is the main usability feature. It allows you to import SVGs
+The custom Plotter Studio app is the brain of the whole plotter. It allows you to import SVGs
 or trace raster images, preview and adjust your drawing, then slice the plate into gcode
  and send it directly to the Arduino over USB. The device tab also replaces the usual pile of terminal commands with buttons for connection, manual homing, jogging, pen control, live
 speed/accel tuning, job progress, and a small live job map.
