@@ -74,53 +74,11 @@ The CAD is also available in Onshape:
 https://cad.onshape.com/documents/21408afa0678dfc090a39137/w/cada99e8b20e026a88815622/e/614e2d6018b77ddf107765d2?renderMode=0&leftPanel=false&uiState=6a7a26314284ccba60f59ccc
 ```
 
-After the machine is assembled and wired, install PlatformIO in VS Code and
-upload the firmware:
-
-```bash
-cd firmware
-pio run -e uno -t upload
-```
-
-Then build and launch Plotter Studio from the repo root:
-
-```bash
-firmware/tools/build_macos_app.sh
-open "Plotter Studio.app"
-```
-
-For the browser version:
-
-```bash
-cd firmware
-tools/run_plotter_studio.sh
-```
-
-Then open:
-
-```text
-http://127.0.0.1:8765
-```
-
-Normal drawing workflow:
-
-1. Upload the firmware to the Arduino Uno.
-2. Launch Plotter Studio.
-3. Connect to the Arduino from the Device tab.
-4. Turn motors off.
-5. Move the toolhead by hand to the bottom-left corner.
-6. Turn motors on.
-7. Press `Confirm X0 Y0`.
-8. Open or import artwork in Prepare.
-9. Place, scale, and rotate it on the plate.
-10. Press `Slice Plate`.
-11. Check Preview and confirm the slice.
-12. Send the job from Device.
-
-For first tests, use `Load Square` or `Load Circle` in Plotter Studio.
-
-More software instructions are in [firmware/instructions.md](firmware/instructions.md).
-The deeper firmware/app notes are in [firmware/technical-notes.md](firmware/technical-notes.md).
+After the hardware is assembled and wired, use
+[Plotter Studio instructions](firmware/instructions.md) to upload the Arduino
+firmware, launch the app, run first motion tests, align letter paper, import art,
+slice the plate, and send drawings. The deeper firmware/app notes are in
+[firmware/technical-notes.md](firmware/technical-notes.md).
 
 ## Repo Layout
 
